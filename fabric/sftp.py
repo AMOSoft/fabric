@@ -7,7 +7,8 @@ import re
 import uuid
 from fnmatch import filter as fnfilter
 
-from fabric.state import output, connections, env
+from fabric import state
+from fabric.state import output, connections
 from fabric.utils import warn
 from fabric.context_managers import settings
 
@@ -123,7 +124,7 @@ class SFTP(object):
         rremote = rremote if rremote is not None else remote_path
         # Handle format string interpolation (e.g. %(dirname)s)
         path_vars = {
-            'host': env.host_string.replace(':', '-'),
+            'host': state.env.host_string.replace(':', '-'),
             'basename': os.path.basename(rremote),
             'dirname': os.path.dirname(rremote),
             'path': rremote
@@ -145,7 +146,7 @@ class SFTP(object):
 
         if output.running:
             print("[%s] download: %s <- %s" % (
-                env.host_string,
+                state.env.host_string,
                 _format_local(local_path, local_is_path),
                 remote_path
             ))
@@ -164,7 +165,7 @@ class SFTP(object):
             with settings(hide('everything'), cwd=""):
                 sudo('cp -p "%s" "%s"' % (remote_path, target_path))
                 # The user should always own the copied file.
-                sudo('chown %s "%s"' % (env.user, target_path))
+                sudo('chown %s "%s"' % (state.env.user, target_path))
                 # Only root and the user has the right to read the file
                 sudo('chmod %o "%s"' % (0400, target_path))
                 remote_path = target_path
@@ -237,7 +238,7 @@ class SFTP(object):
             remote_path = posixpath.join(remote_path, basename)
         if output.running:
             print("[%s] put: %s -> %s" % (
-                env.host_string,
+                state.env.host_string,
                 _format_local(local_path, local_is_path),
                 posixpath.join(pre, remote_path)
             ))

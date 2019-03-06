@@ -38,7 +38,7 @@ import socket
 import select
 
 from fabric.thread_handling import ThreadHandler
-from fabric.state import output, win32, connections, env
+from fabric.state import output, win32, connections
 from fabric import state
 from fabric.utils import isatty
 
@@ -540,18 +540,18 @@ def remote_tunnel(remote_port, local_port=None, local_host="localhost",
         try:
             sock.connect((local_host, local_port))
         except Exception:
-            print "[%s] rtunnel: cannot connect to %s:%d (from local)" % (env.host_string, local_host, local_port)
+            print "[%s] rtunnel: cannot connect to %s:%d (from local)" % (state.env.host_string, local_host, local_port)
             channel.close()
             return
 
         print "[%s] rtunnel: opened reverse tunnel: %r -> %r -> %r"\
-              % (env.host_string, channel.origin_addr,
+              % (state.env.host_string, channel.origin_addr,
                  channel.getpeername(), (local_host, local_port))
 
         th = ThreadHandler('fwd', _forwarder, channel, sock)
         threads.append(th)
 
-    transport = connections[env.host_string].get_transport()
+    transport = connections[state.env.host_string].get_transport()
     transport.request_port_forward(remote_bind_address, remote_port, handler=accept)
 
     try:

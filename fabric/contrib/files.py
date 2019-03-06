@@ -9,7 +9,7 @@ import os
 from StringIO import StringIO
 from functools import partial
 
-from fabric.api import run, sudo, hide, settings, env, put, abort
+from fabric.api import run, sudo, hide, settings, put, abort
 from fabric.utils import apply_lcwd
 
 
@@ -115,6 +115,8 @@ def upload_template(filename, destination, context=None, use_jinja=False,
     .. versionchanged:: 1.11
         Added the  ``temp_dir`` kwarg.
     """
+    from fabric.state import env
+
     func = use_sudo and sudo or run
     if pty is not None:
         func = partial(func, pty=pty)
@@ -208,6 +210,8 @@ def sed(filename, before, after, limit='', use_sudo=False, backup='.bak',
     .. versionadded:: 1.6
         Added the ``shell`` keyword argument.
     """
+    from fabric.state import env
+
     func = use_sudo and sudo or run
     # Characters to be escaped in both
     for char in "/'":

@@ -9,7 +9,7 @@ from tempfile import mkdtemp
 
 from fabric.network import needs_host, key_filenames, normalize
 from fabric.operations import local, run, sudo, put
-from fabric.state import env, output
+from fabric.state import output
 from fabric.context_managers import cd
 
 __all__ = ['rsync_project', 'upload_project']
@@ -103,6 +103,8 @@ def rsync_project(
     .. versionadded:: 1.8.0
         The ``default_opts`` keyword argument.
     """
+    from fabric.state import env
+
     # Turn single-string exclude into a one-item list for consistency
     if not hasattr(exclude, '__iter__'):
         exclude = (exclude,)

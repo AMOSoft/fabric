@@ -21,7 +21,8 @@ from fabric.context_managers import (settings, char_buffered, hide,
 from fabric.io import output_loop, input_loop
 from fabric.network import needs_host, ssh, ssh_config
 from fabric.sftp import SFTP
-from fabric.state import env, connections, output, win32, default_channel
+from fabric import state
+from fabric.state import connections, output, win32, default_channel
 from fabric.thread_handling import ThreadHandler
 from fabric.utils import (
     abort, error, handle_prompt_abort, indent, _pty_size, warn, apply_lcwd,
@@ -92,8 +93,8 @@ def require(*keys, **kwargs):
         Allow iterable ``provided_by`` values instead of just single values.
     """
     # If all keys exist and are non-empty, we're good, so keep going.
-    missing_keys = filter(lambda x: x not in env or (x in env and
-        isinstance(env[x], (dict, list, tuple, set)) and not env[x]), keys)
+    missing_keys = filter(lambda x: x not in state.env or (x in state.env and
+        isinstance(state.env[x], (dict, list, tuple, set)) and not state.env[x]), keys)
     if not missing_keys:
         return
     # Pluralization
@@ -105,8 +106,8 @@ def require(*keys, **kwargs):
         used = "This variable is"
     # Regardless of kwargs, print what was missing. (Be graceful if used outside
     # of a command.)
-    if 'command' in env:
-        prefix = "The command '%s' failed because the " % env.command
+    if 'command' in state.env:
+        prefix = "The command '%s' failed because the " % state.env.command
     else:
         prefix = "The "
     msg = "%sfollowing required environment %s not defined:\n%s" % (
@@ -195,7 +196,7 @@ def prompt(text, key=None, default='', validate=None):
     handle_prompt_abort("a user-specified prompt() call")
     # Store previous env value for later display, if necessary
     if key:
-        previous_value = env.get(key)
+        previous_value = state.env.get(key)
     # Set up default display
     default_str = ""
     if default != '':
@@ -236,7 +237,7 @@ def prompt(text, key=None, default='', validate=None):
                     value = None
     # At this point, value must be valid, so update env if necessary
     if key:
-        env[key] = value
+        state.env[key] = value
     # Print warning if we overwrote some other value
     if key and previous_value is not None and previous_value != value:
         warn("overwrote previous env variable '%s'; used to be '%s', is now '%s'." % (
@@ -343,7 +344,7 @@ def put(local_path=None, remote_path=None, use_sudo=False,
     local_is_path = not (hasattr(local_path, 'read') \
         and callable(local_path.read))
 
-    ftp = SFTP(env.host_string)
+    ftp = SFTP(state.env.host_string)
 
     with closing(ftp) as ftp:
         home = ftp.normalize('.')
@@ -356,13 +357,13 @@ def put(local_path=None, remote_path=None, use_sudo=False,
             remote_path = remote_path.replace('~', home, 1)
 
         # Honor cd() (assumes Unix style file paths on remote end)
-        if not os.path.isabs(remote_path) and env.get('cwd'):
-            remote_path = env.cwd.rstrip('/') + '/' + remote_path
+        if not os.path.isabs(remote_path) and state.env.get('cwd'):
+            remote_path = state.env.cwd.rstrip('/') + '/' + remote_path
 
         if local_is_path:
             # Apply lcwd, expand tildes, etc
             local_path = os.path.expanduser(local_path)
-            local_path = apply_lcwd(local_path, env)
+            local_path = apply_lcwd(local_path, state.env)
             if use_glob:
                 # Glob local path
                 names = glob(local_path)
@@ -530,9 +531,9 @@ def get(remote_path, local_path=None, use_sudo=False, temp_dir=""):
 
     # Honor lcd() where it makes sense
     if local_is_path:
-        local_path = apply_lcwd(local_path, env)
+        local_path = apply_lcwd(local_path, state.env)
 
-    ftp = SFTP(env.host_string)
+    ftp = SFTP(state.env.host_string)
 
     with closing(ftp) as ftp:
         home = ftp.normalize('.')
@@ -545,8 +546,8 @@ def get(remote_path, local_path=None, use_sudo=False, temp_dir=""):
         # Honor cd() (assumes Unix style file paths on remote end)
         if not os.path.isabs(remote_path):
             # Honor cwd if it's set (usually by with cd():)
-            if env.get('cwd'):
-                remote_path_escaped = env.cwd.rstrip('/')
+            if state.env.get('cwd'):
+                remote_path_escaped = state.env.cwd.rstrip('/')
                 remote_path_escaped = remote_path_escaped.replace('\\ ', ' ')
                 remote_path = remote_path_escaped + '/' + remote_path
             # Otherwise, be relative to remote home directory (SFTP server's
@@ -572,7 +573,7 @@ def get(remote_path, local_path=None, use_sudo=False, temp_dir=""):
             # Handle invalid local-file-object situations
             if not local_is_path:
                 if len(names) > 1 or ftp.isdir(names[0]):
-                    error("[%s] %s is a glob or directory, but local_path is a file object!" % (env.host_string, remote_path))
+                    error("[%s] %s is a glob or directory, but local_path is a file object!" % (state.env.host_string, remote_path))
 
             for remote_path in names:
                 if ftp.isdir(remote_path):
@@ -610,7 +611,7 @@ def _sudo_prefix(user, group=None):
     Return ``env.sudo_prefix`` with ``user``/``group`` inserted if necessary.
     """
     # Insert env.sudo_prompt into env.sudo_prefix
-    prefix = env.sudo_prefix % env
+    prefix = state.env.sudo_prefix % state.env
     if user is not None or group is not None:
         return "%s%s%s " % (prefix,
                             _sudo_prefix_argument('-u', user),
@@ -624,7 +625,7 @@ def _shell_wrap(command, shell_escape, shell=True, sudo_prefix=None):
     """
     # Honor env.shell, while allowing the 'shell' kwarg to override it (at
     # least in terms of turning it off.)
-    if shell and not env.use_shell:
+    if shell and not state.env.use_shell:
         shell = False
     # Sudo plus space, or empty string
     if sudo_prefix is None:
@@ -634,7 +635,7 @@ def _shell_wrap(command, shell_escape, shell=True, sudo_prefix=None):
     # If we're shell wrapping, prefix shell and space. Next, escape the command
     # if requested, and then quote it. Otherwise, empty string.
     if shell:
-        shell = env.shell + " "
+        shell = state.env.shell + " "
         if shell_escape:
             command = _shell_escape(command)
         command = '"%s"' % command
@@ -657,13 +658,13 @@ def _prefix_commands(command, which):
     ``lcwd`` is used.
     """
     # Local prefix list (to hold env.command_prefixes + any special cases)
-    prefixes = list(env.command_prefixes)
+    prefixes = list(state.env.command_prefixes)
     # Handle current working directory, which gets its own special case due to
     # being a path string that gets grown/shrunk, instead of just a single
     # string or lack thereof.
     # Also place it at the front of the list, in case user is expecting another
     # prefixed command to be "in" the current working directory.
-    cwd = env.cwd if which == 'remote' else env.lcwd
+    cwd = state.env.cwd if which == 'remote' else state.env.lcwd
     redirect = " >/dev/null" if not win32 else ''
     if cwd:
         prefixes.insert(0, 'cd %s%s' % (cwd, redirect))
@@ -686,19 +687,19 @@ def _prefix_env_vars(command, local=False):
     env_vars = {}
 
     # path(): local shell env var update, appending/prepending/replacing $PATH
-    path = env.path
+    path = state.env.path
     if path:
-        if env.path_behavior == 'append':
+        if state.env.path_behavior == 'append':
             path = '$PATH:\"%s\"' % path
-        elif env.path_behavior == 'prepend':
+        elif state.env.path_behavior == 'prepend':
             path = '\"%s\":$PATH' % path
-        elif env.path_behavior == 'replace':
+        elif state.env.path_behavior == 'replace':
             path = '\"%s\"' % path
 
         env_vars['PATH'] = path
 
     # shell_env()
-    env_vars.update(env.shell_env)
+    env_vars.update(state.env.shell_env)
 
     if env_vars:
         set_cmd, exp_cmd = '', ''
@@ -748,21 +749,21 @@ def _execute(channel, command, pty=True, combine_stderr=None,
     stderr = stderr or sys.stderr
 
     # Timeout setting control
-    timeout = env.command_timeout if (timeout is None) else timeout
+    timeout = state.env.command_timeout if (timeout is None) else timeout
 
     # What to do with CTRl-C?
-    remote_interrupt = env.remote_interrupt
+    remote_interrupt = state.env.remote_interrupt
 
     with char_buffered(sys.stdin):
         # Combine stdout and stderr to get around oddball mixing issues
         if combine_stderr is None:
-            combine_stderr = env.combine_stderr
+            combine_stderr = state.env.combine_stderr
         channel.set_combine_stderr(combine_stderr)
 
         # Assume pty use, and allow overriding of this either via kwarg or env
         # var.  (invoke_shell always wants a pty no matter what.)
         using_pty = True
-        if not invoke_shell and (not pty or not env.always_use_pty):
+        if not invoke_shell and (not pty or not state.env.always_use_pty):
             using_pty = False
         # Request pty with size params (default to 80x24, obtain real
         # parameters if on POSIX platform)
@@ -773,7 +774,7 @@ def _execute(channel, command, pty=True, combine_stderr=None,
         # Use SSH agent forwarding from 'ssh' if enabled by user
         config_agent = ssh_config().get('forwardagent', 'no').lower() == 'yes'
         forward = None
-        if env.forward_agent or config_agent:
+        if state.env.forward_agent or config_agent:
             forward = ssh.agent.AgentRequestHandler(channel)
 
         # Kick off remote command
@@ -909,7 +910,7 @@ def _run_command(command, shell=True, pty=True, combine_stderr=True,
 
         # Check if shell_escape has been overridden in env
         if shell_escape is None:
-            shell_escape = env.get('shell_escape', True)
+            shell_escape = state.env.get('shell_escape', True)
 
         # Handle context manager modifications, and shell wrapping
         wrapped_command = _shell_wrap(
@@ -921,9 +922,9 @@ def _run_command(command, shell=True, pty=True, combine_stderr=True,
         # Execute info line
         which = 'sudo' if sudo else 'run'
         if output.debug:
-            print("[%s] %s: %s" % (env.host_string, which, wrapped_command))
+            print("[%s] %s: %s" % (state.env.host_string, which, wrapped_command))
         elif output.running:
-            print("[%s] %s: %s" % (env.host_string, which, given_command))
+            print("[%s] %s: %s" % (state.env.host_string, which, given_command))
 
         # Actual execution, stdin/stdout/stderr handling, and termination
         result_stdout, result_stderr, status = _execute(
@@ -940,12 +941,12 @@ def _run_command(command, shell=True, pty=True, combine_stderr=True,
         out.failed = False
         out.command = given_command
         out.real_command = wrapped_command
-        if status not in env.ok_ret_codes:
+        if status not in state.env.ok_ret_codes:
             out.failed = True
             msg = "%s() received nonzero return code %s while executing" % (
                 which, status
             )
-            if env.warn_only:
+            if state.env.warn_only:
                 msg += " '%s'!" % given_command
             else:
                 msg += "!\n\nRequested: %s\nExecuted: %s" % (
@@ -1142,7 +1143,7 @@ def sudo(command, shell=True, pty=True, combine_stderr=None, user=None,
     """
     return _run_command(
         command, shell, pty, combine_stderr, sudo=True,
-        user=user if user else env.sudo_user,
+        user=user if user else state.env.sudo_user,
         group=group, quiet=quiet, warn_only=warn_only, stdout=stdout,
         stderr=stderr, timeout=timeout, shell_escape=shell_escape,
         capture_buffer_size=capture_buffer_size,
@@ -1233,7 +1234,7 @@ def local(command, capture=False, shell=None):
     out.failed = False
     out.return_code = p.returncode
     out.stderr = err
-    if p.returncode not in env.ok_ret_codes:
+    if p.returncode not in state.env.ok_ret_codes:
         out.failed = True
         msg = "local() encountered an error (return code %s) while executing '%s'" % (p.returncode, command)
         error(message=msg, stdout=out, stderr=err)
@@ -1291,5 +1292,5 @@ def reboot(wait=120, command='reboot', use_sudo=True):
         # automatically trigger a reconnect.
         # We use it here to force the reconnect while this function is still in
         # control and has the above timeout settings enabled.
-        connections.connect(env.host_string)
+        connections.connect(state.env.host_string)
     # At this point we should be reconnected to the newly rebooted server.
